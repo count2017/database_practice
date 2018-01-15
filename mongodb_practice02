@@ -1,0 +1,420 @@
+db.getCollection('coll').find({})
+
+
+// ----------------学习【MongoDB--（5-2）】：索引（查看索引的使用，管理索引）---------------
+db.blogs.findOne();
+
+
+// 【使用explain和hint】
+// 前面讲高级查询选项时，提到过"$explain" 和 ”$hint“可以作为包装查询的选项关键字使用，
+// 其实这两个本身就可以作为操作游标的函数调用！游标调用explain函数会返回一个文档，用于描述当前查询的一些细节信息。
+db.blogs.find({"comment.author":"joe"}).explain();
+
+
+db.user.find();
+db.user.ensureIndex({"name":1,"age":1});  
+db.user.find({"age":40, "name":"tim"}).explain();
+//**********我们看，返回文档的键没有区别，其默认使用了索引"name_1_age_1"，
+// 这是查询优化器为我们使用的索引！我们此处可以通过hint进行更行，即强制这个查询使用我们定义的“age_1_name_1”索引，如下：
+var cursor = db.user.find({"age":40,"name":"tim"}).hint({"age":1,"name":1});//????报错！！
+cursor.explain();
+
+
+
+// ----------------------【索引管理】----------------------------
+// 上面提到索引的元信息（描述信息）存储在集合system.indexes中，这是系统提供的保留集合（创建数据库时）
+db.system.indexes.find();//???不起作用？？
+db.user.indexes.find(); 
+db.coll.indexes.find();
+
+
+// 修改索引】
+// 随着应用数据的积累或集合结构的改变，老的索引会出现效率低下的问题，修改索引页也是不可避免了。
+// 我们可以随时通过ensureIndex函数为集合添加索引，这个函数前面已经多次使用，这里我们再介绍
+// 该函数第二个参数文档的一个键"background"，布尔类型，表明是否在数据库服务空闲时来构建索引，
+// 因为索引的构建是一个耗时耗资源的过程，并且在构建过程中，数据库会阻塞所有的访问请求，对于一个
+// 大数量的集合添加索引我们应该启用这个选型！我们还要知道的是，即时启用了这个选项，构建仍会影响
+// 正常服务，但不会彻底阻塞数据库服务：
+db.user.ensureIndex({"name":1,"registered":-1},{"background":true}); 
+
+
+//利用集合的dropIndex(indexName)删除一个集合上的特定索引。
+db.user.dropIndex("name_1_age_1");
+db.user.find({"age":40, "name":"tim"}).explain();
+
+
+
+
+//********我们需要注意，集合还有一个函数dropIndexes，不接受任何参数，
+
+// 这个函数要慎用啊，他会直接将集合所有的索引全部删掉！!!!!!!Shell中还可以通过
+
+// 运行命令的方式删除一个索引：************************
+
+
+
+
+
+
+
+
+
+
+
+// 【地理空间索引】
+
+// 目前网络上LBS(location based service)越来越流行，有一个应用就是查询你所在位置附件的某些场所。
+
+// 为了提升这种查询的速度（查询不同于上面单维度，需要搜索两个维度），
+
+// MongoDB为坐标平面查询提供了专门的索引，即称作地理空间索引。
+
+// 建立地理空间索引同样调用ensureIndex方法，{"gps" : "2d"}，以前建立索引键的值为1，或-1，地理空间索引的值固定为"2d"。
+
+db.shopstreet.insert({ "_id" : ObjectId("502673678a84caa12e8070be"), "desc" : "coffeehouse", "gps" : [ 100, 120 ] });  
+
+db.shopstreet.insert({ "_id" : ObjectId("502673738a84caa12e8070bf"), "desc" : "coffeebar", "gps" : [ 110, 130 ] } );
+
+db.shopstreet.ensureIndex({"gps" : "2d"}); 
+
+
+
+
+
+
+
+
+
+//-------------------【聚合函数使用】----------------------------
+
+db.user.count();//集合的count函数是最简单的聚合函数，返回集合中文档的数量，也可以接受一个查询文档，统计符合这个查询的文档数量：
+
+db.user.count({"name":"tim"});
+
+
+
+// 【distinct】
+
+// 用于找出一个集合中，给定键的所有不同的值！
+
+db.user.distinct("name");
+
+db.runCommand({"distinct":"user","key":"name"});
+
+
+
+
+
+// 【group】
+
+// group聚合可以做稍微复杂一些的操作，其执行过程为：先按照指定的键对集合中的文档进行分组，
+
+// 然后通过聚合每一组中的所有文档，来产生最终的结果文档。
+
+db.vegetableprice.insert({ "_id" : ObjectId("50271b4ae02ab93d5c5be795"), "name" : "tomato", "price" : 3.3, 
+
+    "time" : ISODate("2012-08-12T02:56:10.303Z") } ); 
+
+db.vegetableprice.insert({ "_id" : ObjectId("50271b58e02ab93d5c5be796"), "name" : "tomato", "price" : 3.5, 
+
+    "time" : ISODate("2012-08-12T02:56:24.843Z") } ); 
+
+db.vegetableprice.insert({ "_id" : ObjectId("50271b95e02ab93d5c5be797"), "name" : "eggplant", "price" : 5.6,
+
+    "time" : ISODate("2012-08-12T02:57:25.605Z") } ); 
+
+db.vegetableprice.insert({ "_id" : ObjectId("50271ba6e02ab93d5c5be798"), "name" : "cucumber", "price" : 4.7, 
+
+    "time" : ISODate("2012-08-12T02:57:42.031Z") });  
+
+db.vegetableprice.insert({ "_id" : ObjectId("50271bafe02ab93d5c5be799"), "name" : "eggplant", "price" : 5.9, 
+
+    "time" : ISODate("2012-08-12T02:57:51.001Z") }  );
+
+db.vegetableprice.insert({ "_id" : ObjectId("50271bb7e02ab93d5c5be79a"), "name" : "cucumber", "price" : 4.3, 
+
+    "time" : ISODate("2012-08-12T02:57:59.363Z") } ); 
+
+db.vegetableprice.insert({ "_id" : ObjectId("50271bdae02ab93d5c5be79b"), "name" : "bean", "price" : 8.9, 
+
+    "time" : ISODate("2012-08-12T02:58:34.931Z") } );
+
+db.vegetableprice.find();
+
+
+
+
+
+
+
+// “initial” ： 累加器文档！分组后，会对每一组执行reduce函数，reduce函数会接受两个文档参数，第一个是分组当前遍历的文档，
+
+//     第二个就是initial键指定的累加器文档！每一组所有文档执行reduce都会使用这个文档，所以改变会一直保留在累加器文档中！
+
+db.runCommand({"group":{
+
+    "ns":"vegetableprice",  //“ns” ： 字符串，指定要进行操作的集合名称  
+
+    "key":{"name":true},//“key”： 文档，指定要进行分组所使用的键，
+
+                        //此处可以指定多个键，分组将按照这些键的值进行，此处会区分大小写！对于某些应用，
+
+                       // 我们可能要分组不去区分值的大小写，这个后面会提到如何进行！
+
+    "initial":{"time":0},
+
+    "$reduce":function(doc,prev){//“$reduce”： 函数。分组后，会通过这个函数对每个分组进行聚合！
+
+                                      //注意聚合时，每一组会有一个独立的累加器文档，结束后，累加器文档中即记录聚合结果！
+
+            if(doc.time > prev.time){
+
+                prev.time = doc.time;
+
+                prev.price = doc.price;
+
+            }
+
+        }
+
+}});
+
+
+
+db.runCommand({"group":{  
+
+    "ns":"vegetableprice",  
+
+    "key":{"name":true},  
+
+    "initial":{"time":0},  
+
+    "$reduce":function(doc, prev){  
+
+    if(doc.time > prev.time){  
+
+    prev.time = doc.time;  
+
+    prev.price = doc.price;  
+
+    }},  
+
+    "condition":{"name":{"$in":["tomato", "cucumber"]}}  
+
+    }}); 
+
+
+
+ db.runCommand({"group" : {  
+
+    "ns" : "vegetableprice",  
+
+    "key" : {"name" : true},  
+
+    "initial" : {"time" : 0},  
+
+    "$reduce" : function(doc, prev){  
+
+    if(doc.time > prev.time){  
+
+    prev.time = doc.time;  
+
+    prev.price = doc.price;  
+
+    }},  
+
+    "cond":{"name" : {"$in" : ["tomato", "cucumber"]}}  
+
+    }});
+
+
+
+
+
+// “condition”： 条件。在对集合进行分组时，我们可以过滤部分文档，
+
+//     这里的过滤条件就是我们前面提到的查询条件！可以使用前面提到的
+
+//     各种查询条件操作符！这个键也可以缩写为“cond” 或 “q” 。
+
+db.runCommand({"group" : {  
+
+    "ns" : "vegetableprice",  
+
+    "key" : {"name" : true},  
+
+    "initial" : {"time" : 0},  
+
+    "$reduce" : function(doc, prev){  
+
+    if(doc.time > prev.time){  
+
+    prev.time = doc.time;  
+
+    prev.price = doc.price;  
+
+    }},  
+
+    "q":{"name":{"$in":["tomato", "cucumber"]}}  
+
+    }}); 
+
+
+
+
+
+
+
+//------------【使用完成器】-----------------------
+
+// 上述我们可以看到group操作的返回值，其中键“retval”指向所有聚合后的文档，
+
+//     这些就是客户端需要的文档。group操作的返回值文档最大为4MB，因为有这
+
+//     个大小的限制和考虑到效率，我们有时需要对这些聚合后得到的文档进行进一
+
+//     步地修剪后再返回！比如，我们有这样一个blog集合，其中每一个文档是一
+
+//     个blog，我们这次要统计的是，每个作者在写博客时最常使用的tag（标签）
+
+//     ，我们先看看这个集合结构：
+
+db.blog.find();
+
+db.blog.insert({ "_id" : ObjectId("50272f94e02ab93d5c5be79c"), "author" : "jim", "content" : "...", 
+
+    "tag" : [ "cat", "pet", "dog" ] }  );
+
+db.blog.insert({ "_id" : ObjectId("50272f9ee02ab93d5c5be79d"), "author" : "jim", "content" : "...", 
+
+    "tag" : [ "cat", "pet", "pig" ] }  );
+
+db.blog.insert({ "_id" : ObjectId("50272fcee02ab93d5c5be79e"), "author" : "jim", "content" : "...", 
+
+    "tag" : [ "cat", "pet", "hamster" ] } ); 
+
+db.blog.insert({ "_id" : ObjectId("50272fe4e02ab93d5c5be79f"), "author" : "tom", "content" : "...", 
+
+    "tag" : [ "db", "oracle", "mysql" ] } ); 
+
+db.blog.insert({ "_id" : ObjectId("50272fede02ab93d5c5be7a0"), "author" : "tom", "content" : "...", 
+
+    "tag" : [ "db", "mongodb", "mysql" ] });
+
+
+
+db.runCommand({"group":{
+
+    "ns":"blog",
+
+    "key":{"author":true},
+
+    "initial":{"tag":{}},
+
+    "$reduce":function(doc,prev){
+
+                for(var i in doc.tag){
+
+                    if(doc.tag[i] in prev.tag){
+
+                        prev.tag[doc.tag[i]]++;
+
+                    } else{
+
+                        prev.tag[doc.tag[i]] = 1;
+
+                    }
+
+                }
+
+              }
+
+}});
+
+
+
+
+
+// 从上述结果我们可以看出，返回值中，包含所有作者使用的所有的tag的次数统计，
+
+// 我们可以将这个文档返回给客户端，然后由客户端去比较得到每个作者用得最多的tag。
+
+// 但这样做会产生很多开销影响效率，对于大的集合的统计尤为明显！我们此时可以
+
+// 通过在统计时使用“finalize”键来进一步处理reduce后的结果：
+
+db.runCommand({"group":{
+
+    "ns":"blog",
+
+    "key":{"author":true},
+
+    "":
+
+    
+
+}});
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
